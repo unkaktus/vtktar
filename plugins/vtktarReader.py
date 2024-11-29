@@ -1,5 +1,6 @@
 import vtk
 import tarfile
+import lzma
 
 from paraview import util
 from vtkmodules.vtkCommonDataModel import vtkStructuredPoints
@@ -94,20 +95,21 @@ class vtktarReader(VTKPythonAlgorithmBase):
         members = self.tar.getmembers()
         for member in members:
             # Header
-            file = self.tar.extractfile(member)
-            file.readline()
-            header_str = file.readline().decode("utf-8").rstrip()
-            header = parse_bam_header(header_str)
-            self._timesteps += [header["time"]]
-            file.close()
-
+            file_compressed = self.tar.extractfile(member)
+            with lzma.LZMAFile(file_compressed) as file:
+                file.readline()
+                header_str = file.readline().decode("utf-8").rstrip()
+                header = parse_bam_header(header_str)
+                self._timesteps += [header["time"]]
+            file_compressed.close()
             # Whole extent
-            file = self.tar.extractfile(member)
-            dimensions = get_dimensions(file.read())
-            for i in range(3):
-                if dimensions[i] > whole_extent[i]:
-                    whole_extent[i] = dimensions[i]
-            file.close()
+            file_compressed = self.tar.extractfile(member)
+            with lzma.LZMAFile(file_compressed) as file:
+                dimensions = get_dimensions(file.read())
+                for i in range(3):
+                    if dimensions[i] > whole_extent[i]:
+                        whole_extent[i] = dimensions[i]
+            file_compressed.close()
 
         util.SetOutputWholeExtent(self, [0, whole_extent[0], 0, whole_extent[1], 0, whole_extent[2]])
 
@@ -122,7 +124,9 @@ class vtktarReader(VTKPythonAlgorithmBase):
         time = get_timestep(self)
         i = self._timesteps.index(time)
         member = self.tar.getmembers()[i]
-        file_content = self.tar.extractfile(member).read()
+        file_content = None
+        with lzma.LZMAFile(self.tar.extractfile(member)) as file:
+            file_content = file.read()
 
         reader = vtk.vtkDataSetReader()
         reader.ReadFromInputStringOn()
