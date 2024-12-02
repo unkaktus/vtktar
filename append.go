@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ulikunitz/xz"
+	"github.com/klauspost/compress/zstd"
 )
 
 // Append appends VTK files to the destination VTKTAR archive
@@ -35,15 +35,15 @@ func Append(destFilename string, filenames []string) error {
 		}
 
 		// Fill the buffer with compressed file contents
-		xzw, err := xz.NewWriter(buffer)
+		zw, err := zstd.NewWriter(buffer)
 		if err != nil {
 			return fmt.Errorf("create xz writer: %w", err)
 		}
-		_, err = io.Copy(xzw, f)
+		_, err = io.Copy(zw, f)
 		if err != nil {
 			return fmt.Errorf("copy data to xz writer: %w", err)
 		}
-		xzw.Close()
+		zw.Close()
 
 		// Write header
 		header := &tar.Header{

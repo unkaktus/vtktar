@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ulikunitz/xz"
+	"github.com/klauspost/compress/zstd"
 )
 
 // Extract extracts the VTKTAR archive into the destination
@@ -32,7 +32,7 @@ func Extract(destination, filename string) error {
 		if err != nil {
 			return fmt.Errorf("iterating through the tar archive: %w", err)
 		}
-		r, err := xz.NewReader(tr)
+		r, err := zstd.NewReader(tr)
 		if err != nil {
 			return fmt.Errorf("create xz reader: %w", err)
 		}
