@@ -1,6 +1,7 @@
+import io
 import vtk
 import tarfile
-import lzma
+import zstandard
 
 from paraview import util
 from vtkmodules.vtkCommonDataModel import vtkStructuredPoints
@@ -96,15 +97,16 @@ class vtktarReader(VTKPythonAlgorithmBase):
         for member in members:
             # Header
             file_compressed = self.tar.extractfile(member)
-            with lzma.LZMAFile(file_compressed) as file:
+            decompressor = zstandard.ZstdDecompressor()
+            with io.TextIOWrapper(decompressor.stream_reader(file_compressed), encoding='ascii', errors='ignore') as file:
                 file.readline()
-                header_str = file.readline().decode("utf-8").rstrip()
+                header_str = file.readline().rstrip()
                 header = parse_bam_header(header_str)
                 self._timesteps += [header["time"]]
             file_compressed.close()
             # Whole extent
             file_compressed = self.tar.extractfile(member)
-            with lzma.LZMAFile(file_compressed) as file:
+            with decompressor.stream_reader(file_compressed) as file:
                 dimensions = get_dimensions(file.read())
                 for i in range(3):
                     if dimensions[i] > whole_extent[i]:
@@ -112,6 +114,8 @@ class vtktarReader(VTKPythonAlgorithmBase):
             file_compressed.close()
 
         util.SetOutputWholeExtent(self, [0, whole_extent[0], 0, whole_extent[1], 0, whole_extent[2]])
+
+
 
         set_timesteps(self, self._timesteps)
 
@@ -124,9 +128,8 @@ class vtktarReader(VTKPythonAlgorithmBase):
         time = get_timestep(self)
         i = self._timesteps.index(time)
         member = self.tar.getmembers()[i]
-        file_content = None
-        with lzma.LZMAFile(self.tar.extractfile(member)) as file:
-            file_content = file.read()
+        decompressor = zstandard.ZstdDecompressor()
+        file_content = decompressor.stream_reader(self.tar.extractfile(member)).read()
 
         reader = vtk.vtkDataSetReader()
         reader.ReadFromInputStringOn()
